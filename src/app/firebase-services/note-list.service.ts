@@ -1,12 +1,17 @@
 import { Injectable, inject } from '@angular/core';
 import { Note } from '../interfaces/note.interface';
 import {
+  query,
+  orderBy,
+  limit,
+  where,
   Firestore,
   collection,
   doc,
   onSnapshot,
   addDoc,
   updateDoc,
+  deleteDoc,
 } from '@angular/fire/firestore';
 import { Observable } from 'rxjs';
 
@@ -25,6 +30,13 @@ export class NoteListService {
   constructor() {
     this.unsubTrash = this.subTrashList();
     this.unsubNotes = this.subNoteList();
+  }
+
+  async deleteNote(colId: 'notes' | 'trash', docId: string) {
+    let docRef = this.getSingleDocRef(colId, docId);
+    await deleteDoc(docRef).catch((err) => {
+      console.log(err);
+    });
   }
 
   async updateNote(note: Note) {
@@ -55,8 +67,10 @@ export class NoteListService {
     }
   }
 
-  async addNote(item: Note) {
-    await addDoc(this.getNotesRef(), item)
+  async addNote(item: Note, colId: 'notes' | 'trash') {
+    const collectionRef =
+      colId === 'notes' ? this.getNotesRef() : this.getTrashRef();
+    await addDoc(collectionRef, item)
       .catch((err) => {
         console.log(err);
       })
@@ -64,6 +78,8 @@ export class NoteListService {
         console.log('Document written with ID: ', docRef?.id);
       });
   }
+
+  // Todo: Angepasst
 
   subTrashList() {
     return onSnapshot(this.getTrashRef(), (list) => {
@@ -75,7 +91,12 @@ export class NoteListService {
   }
 
   subNoteList() {
-    return onSnapshot(this.getNotesRef(), (list) => {
+    const q = query(this.getNotesRef(), limit(100));
+    // Filter-Methoden von Firebase:
+    // Limit() - zeigt nur die erste 100 Eintraege an.
+    // orderBy() sortiert alphabetisch. Allerdings gehen Großbuchstaben immer vor. ZB: G I N a i
+    // where("marked", "==", "true") - Immer mit 3 Attributen.
+    return onSnapshot(q, (list) => {
       this.normalNotes = [];
       list.forEach((element) => {
         this.normalNotes.push(this.setNoteObject(element.data(), element.id));
