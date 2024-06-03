@@ -21,15 +21,18 @@ import { Observable } from 'rxjs';
 export class NoteListService {
   trashNotes: Note[] = [];
   normalNotes: Note[] = [];
+  normalMarkedNotes: Note[] = [];
 
   unsubTrash;
   unsubNotes;
+  unsubMarkedNotes;
 
   firestore: Firestore = inject(Firestore);
 
   constructor() {
-    this.unsubTrash = this.subTrashList();
     this.unsubNotes = this.subNoteList();
+    this.unsubMarkedNotes = this.subMarkedNoteList();
+    this.unsubTrash = this.subTrashList();
   }
 
   async deleteNote(colId: 'notes' | 'trash', docId: string) {
@@ -91,7 +94,12 @@ export class NoteListService {
   }
 
   subNoteList() {
-    const q = query(this.getNotesRef(), limit(100));
+    const q = query(
+      this.getNotesRef(),
+      // where('marked', '==', 'false'), #klappt nicht
+      limit(10)
+      // orderBy('title'),
+    );
     // Filter-Methoden von Firebase:
     // Limit() - zeigt nur die erste 100 Eintraege an.
     // orderBy() sortiert alphabetisch. Allerdings gehen Großbuchstaben immer vor. ZB: G I N a i
@@ -104,14 +112,31 @@ export class NoteListService {
     });
   }
 
+  subMarkedNoteList() {
+    const q = query(
+      this.getNotesRef(),
+      where('marked', '==', 'false'),
+      limit(10)
+    );
+    return onSnapshot(q, (list) => {
+      this.normalMarkedNotes = [];
+      list.forEach((element) => {
+        this.normalMarkedNotes.push(
+          this.setNoteObject(element.data(), element.id)
+        );
+      });
+    });
+  }
+
   ngOnDestroy() {
     this.unsubTrash();
     this.unsubNotes();
+    this.unsubMarkedNotes();
   }
 
   setNoteObject(obj: any, id: string): Note {
     return {
-      id: id,
+      id: id || '',
       type: obj.type || 'note',
       title: obj.title || '',
       content: obj.content || '',
